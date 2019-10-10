@@ -1,0 +1,25 @@
+## usage qsub trim.pbs -v INDIR=fastq,OUTDIR=fastqc,ADAPTER=/path/to/adapter.fa
+#PBS -N trim
+#PBS -l nodes=1:ppn=28
+#PBS -l mem=50GB
+#PBS -l walltime=10:00:00
+#PBS -q shortq
+#PBS -j oe
+#PBS -o trim.log
+
+export TRIMMOMATIC=/home/eric.kort/local/share/Trimmomatic/trimmomatic-0.39.jar
+export OUTDIR
+export ADAPTER
+
+# only remove adapters. No quality filtering as that has faded out of fashion
+trimmomatic () {
+  R1=$1
+  BASEOUT=$(echo ${R1/R1*/R.fastq.gz} | xargs -n1 basename | xargs -I{} echo "$OUTDIR/{}")
+  java -jar $TRIMMOMATIC PE -threads 4 -basein $R1 -baseout $BASEOUT ILLUMINACLIP:${ADAPTER}:2:30:10 MINLEN:30
+}
+export -f trimmomatic
+
+# trimmomatic seems to have limited ability to parallelize, perhaps due to I/O 
+# being rate limited. So we set threads to 4 above, and then work on multiple (6)
+# files simulataneously.
+find ${INDIR}/*R1* | xargs -I{} -n1 -P6 bash -c 'trimmomatic "{}"'

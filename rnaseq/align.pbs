@@ -1,0 +1,38 @@
+## usage qsub align.pbs -v INDIR=fastq,OUTDIR=star
+#PBS -N star
+#PBS -l nodes=1:ppn=28
+#PBS -l mem=50GB
+#PBS -l walltime=22:00:00
+#PBS -q shortq
+#PBS -j oe
+#PBS -o align.log
+
+export GENOME=/primary/projects/jovinge/local/share/Transcriptomes/hs/star
+#INDIR=$1
+#export OUTDIR=$2
+export OUTDIR
+
+# only remove adapters. No quality filtering as that has faded out of fashion
+star () {
+  R1=$1
+  R2=${R1/R1/R2}
+  R1_BASE=$(basename ${R1/_R1*/})
+  OUT=${OUTDIR}/${R1_BASE}/
+  mkdir ${OUT}
+  #echo $R1 $R2 $OUT
+  STAR \
+    --runThreadN 27 \
+    --genomeDir ${GENOME} \
+    --readFilesCommand gunzip -c \
+    --outFileNamePrefix ${OUT} \
+    --quantMode GeneCounts \
+    --readFilesIn ${R1} ${R2}
+  # save space as we already have the counts from quantmode
+  rm ${OUT}/*.out.sam
+}
+export -f star
+
+# trimmomatic seems to have limited ability to parallelize, perhaps due to I/O 
+# being rate limited. So we set threads to 4 above, and then work on multiple (6)
+# files simulataneously.
+find ${INDIR}/*R1* | xargs -I{} -n1 bash -c 'star "{}"'

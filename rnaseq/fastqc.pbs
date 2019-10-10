@@ -1,0 +1,15 @@
+## usage qsub fastqc.pbs -v INDIR=fastq,OUTDIR=fastqc
+#PBS -N fastqc
+#PBS -l nodes=1:ppn=28
+#PBS -l mem=10GB
+#PBS -l walltime=20:00:00
+#PBS -q shortq
+#PBS -j oe
+#PBS -o fastqc.log
+
+if [ ! -d "${OUTDIR}/tmp" ] 
+then
+    mkdir ${OUTDIR}/tmp
+fi
+
+ls ${INDIR}/*.fastq.gz | xargs fastqc -t 27 -d ${OUTDIR}/tmp -o ${OUTDIR}
