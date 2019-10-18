@@ -1,0 +1,7 @@
+#PBS -l walltime=24:00:00
+#PBS -N gene_pdf
+## merge standard error and output
+#PBS -l nodes=1:ppn=28
+
+./perm_genes.R --host 10.152.220.27 --sample 62 --iter 100
+

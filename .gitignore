@@ -16,6 +16,10 @@
 
 # RStudio files
 .Rproj.user/
+*.Rproj
+
+# OS files
+.DS_Store
 
 # produced vignettes
 vignettes/*.html
