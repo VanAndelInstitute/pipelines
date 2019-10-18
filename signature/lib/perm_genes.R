@@ -9,10 +9,10 @@ setwd(Sys.getenv("PBS_O_WORKDIR"))
 
 spec = matrix(c(
   'sample', 's', 1, "integer", "sample size for each iteration.",
-  'iter', 'i', 1, "integer", "number of iterations.",
-  'host', 'r', 1,    "character", "IP address of redis server.",
-  'port', 'p', 1,    "character", "port of redis server, default is 6379",
-  'type', 't', 1, "character", "pert_type, either `trt_sh` (default) or `trt_oe`",
+  'iter', 'i', 1,   "integer", "number of iterations.",
+  'host', 'r', 1,   "character", "IP address of redis server.",
+  'port', 'p', 1,   "character", "port of redis server, default is 6379",
+  'type', 't', 1,   "character", "pert_type, either `trt_sh` (default) or `trt_oe`",
   'outfile', 'o', 1, "character", "output file root, default is gene_type_sample",
   'help', 'h', 0, "logical", "print usage"
 ), byrow=TRUE, ncol=5)
@@ -30,7 +30,7 @@ if ( is.null(opt$sample ) ) { stop("--sample argument is required.")}
 if ( is.null(opt$iter ) ) { stop("--iter argument is required.")}
 if ( is.null(opt$outfile) ) { opt$outfile = paste0("gene_", opt$type, "_", opt$sample, "_pdf.rds")}
 
-metadata <- readRDS("data/metadata.rds")
+metadata <- readRDS("../data/metadata.rds")
 SAMPLESIZE = opt$sample
 
 init <- function() {
