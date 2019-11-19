@@ -1,0 +1,75 @@
+---
+title: "inDrop Diagnostics"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+```{r include = FALSE}
+knitr::opts_chunk$set(echo=FALSE)
+```
+
+This notebook will generate some diagnostic information on an inDrop sequencing run based on the quant_metrics file output by the pipeline. Set the `input_file` and `cell_count` (expected # of cells) variable below and then preview the notebook.
+
+```{r, echo=TRUE}
+input_file <- "~/seq/Emily/JOVS_20191029_scRNA/P3_C5.quant_metrics.tsv.gz"
+cell_count <- 1000
+
+```
+
+
+```{r}
+dat <- read.delim(input_file, header=TRUE, as.is=TRUE, sep="\t")[ , c(1,2,3,7)]
+column_labels <- c("Barcode",
+                   "Reads",
+                   "Aligned",
+                   "No Alignment")
+colnames(dat) <- column_labels
+```
+
+## Alignment & Barcode level stats
+
+```{r, results='asis'}
+stats <- data.frame(Metric = "Alignment", Value = paste0(round(100*sum(dat$Aligned)/sum(dat$Reads)), "%"), 
+                    stringsAsFactors = FALSE)
+
+stats <- rbind(stats, 
+               c(Metric = "Total Barcodes", Value = nrow(dat)))
+
+bc_threshold <- quantile(dat$Aligned, 1 - (cell_count / nrow(dat)))
+stats <- rbind(stats, 
+               c(Metric = "Min Reads / Cell", Value = round(bc_threshold)))
+
+mean_counts <- mean(dat$Aligned[which(dat$Aligned > bc_threshold)])
+stats <- rbind(stats, 
+               c(Metric = "Mean Counts / Cell", Value = round(mean_counts)))
+               
+knitr::kable(stats)
+```
+
+## Diagnostic Plots
+
+```{r}
+library(ggplot2)
+ggplot(dat, aes(x=log10(Aligned))) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="white", binwidth=.05) +
+ geom_density(alpha=.2, fill="#58A3E5") +
+ theme_bw()
+```
+
+```{r}
+library(ggplot2)
+dat <- dat[order(dat$Aligned, decreasing=TRUE),]
+dat$Color <- "gray"
+dat$Color[which(dat$Aligned > bc_threshold)] <- "#58A3E5"
+ggplot(dat, aes(x = 1:nrow(dat), y=dat$Aligned)) +
+ geom_point(aes(color = Color)) +
+ scale_y_continuous(trans='log10') +
+ scale_x_continuous(trans='log10') +
+ scale_color_identity() +
+ ylab("Sorted Alignment Count (log10") +
+ xlab("Index (log10") +
+ theme_bw()
+```
