@@ -56,12 +56,12 @@ sudo apt install -y nginx
 
 You should now be able to go to www.yourserver.com (assuming you used the 'www' 
 prefix when setting up the routing above, and obviously substituting your 
-domain name for "yourserver.com") an see the nginx welcome message.
+domain name for "yourserver.com") and see the nginx welcome message.
 
 ## Enable HTTPS
 
 In order to serve securely, we first need public and private certificates 
-the verify our identity. 
+that verify our identity. 
 
 IIUC, although you can generate SSL certificates for free with the AWS 
 Certificate Manager, you can not actually download those certificates 
@@ -72,7 +72,7 @@ require here.
 The simplest (and still free) way to do this is to use certificates from 
 [letsencrypt.org](letsencrypt.org) and install them on our instance all 
 in one shot using [certbot](certbot.eff.org). For Ubuntu 18.04, the following 
-is all that is required (earlier or later releases of Ubuntu may be slightly 
+is all that is required. (Earlier or later releases of Ubuntu may be slightly 
 different. If the following does not work, check instructions at the certbot 
 link above).
 
@@ -176,6 +176,7 @@ server {
   # this will be the relative path to your app.
   # DO NOT OMIT THE TRAILING SLASH!
   location /hello/ {
+      # DO NOT OMIT THE TRAILING SLASH!
       proxy_pass http://localhost:3000/;
       proxy_http_version 1.1;
       proxy_set_header Upgrade $http_upgrade;
@@ -224,4 +225,3 @@ details are handled by NGINX. This makes app development and maintenance simpler
 
 You can now enhance your app and add additional apps (running on different ports) 
 as required. 
-

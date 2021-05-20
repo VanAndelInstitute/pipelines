@@ -59,4 +59,17 @@ Assume availability of HPC/qsub infrastruture.
 
 ```
 
+Assumes availability of HPC/qsub/redis infrastruture.
 
+
+# score drugs based on signature
+
+```
+# Usage: ./score_genes [-[-infile|i] <character>] [-[-outfile|o] <character>] [-[-help|h]]
+#     -i|--infile     input file in rds format, such as output by fetch_inst.
+#     -o|--outfile    output file, default is genescores.rds
+#     -h|--help       print usage
+
+./score_drugs -h
+    
+```

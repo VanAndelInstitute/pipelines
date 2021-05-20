@@ -1,0 +1,156 @@
+#!/usr/local/bin/Rscript
+
+library('getopt')
+library(rredis)
+library(snow)
+library(doSNOW)
+
+spec = matrix(c(
+  'host', 'r', 1,    "character", "IP address of redis server.",
+  'port', 'p', 1,    "character", "port of redis server, default is 6379.",
+  'ncores', 'c', 1,    "numeric", "number of cores",
+  'up_grp', 'u', 1,    "character", "upregulated signature file",
+  'down_grp', 'd', 1,    "character", "downregulated signature file",
+  'outfile', 'o', 1, "character", "output file, default is drugs_scores.rds",
+  'help', 'h', 0,    "logical", "print usage"
+), byrow=TRUE, ncol=5)
+opt = getopt(spec)
+
+if ( !is.null(opt$help) ) {
+  cat(getopt(spec, usage=TRUE))
+  q(status=1)
+}
+
+if ( is.null(opt$port    ) ) { opt$port      = 6379      }
+if ( is.null(opt$host    ) ) { stop("--host argument is required.")      }
+if ( is.null(opt$up_grp    ) ) { stop("--up_grp argument is required.")      }
+if ( is.null(opt$down_grp    ) ) { stop("--up_grp argument is required.")      }
+if ( is.null(opt$ncores    ) ) { stop("--ncores argument is required.")      }
+if ( is.null(opt$outfile ) ) { opt$outfile  = drug_scores.rds")}
+
+opt$host <- 
+r_host <- "10.152.220.23"
+r_port <- 6379
+
+
+check_redis <- function() {
+  tryCatch(
+    {
+      redisConnect(host=r_host, port=r_port, nodelay = FALSE)
+    },
+    error = function(e) {
+      print(e)
+      stop("Could not connect to redis. Env redis_host = ", r_host, " redis_port = ", r_port, ".")
+    })
+  dbs <- redisCmd("DBSIZE")[1]
+  if(dbs != "1221420")
+    stop(paste0("LINCS db has ", dbs, " records, expected 1221420. Exiting."))
+  return(TRUE)
+}
+
+ok <- check_redis()
+
+metadata <- readRDS("data/metadata.rds")
+metadata$pert_desc <- tolower(metadata$pert_desc)
+
+fda_ix <- which(metadata$is_fda)
+
+# restrict to gold instances
+fda_ix <- fda_ix[which(metadata$is_gold[fda_ix])]
+fda_keys <- paste(metadata$distil_id[fda_ix], "_ZSVC", sep="")
+
+bigFetch <- function(keys, stride=2000) {
+  data <- matrix(0, ncol=length(keys), nrow=978)
+  keys <- split(keys, ceiling(seq_along(fda_keys)/stride))
+
+  for(i in 1:length(keys)) {
+    r <- redisMGet(keys[[i]])
+    for(ii in 1:length(r)) {
+      if(length(r[[ii]]) >  0) {
+        data[,((i-1)*stride+ii)] <- r[[ii]]
+      }
+    }
+    print(i*stride)
+  }
+  data
+}
+
+data <- bigFetch(fda_keys)
+data <- apply(data, 2, as.numeric)
+missing <- which(apply(data, 2, sum)==0)
+data <- data[,-missing]
+fda_ix <- fda_ix[-missing]
+rownames(data) <- names(redisGet(fda_keys[1]))
+drugs <- metadata$pert_desc[fda_ix]
+
+#76 up 37 down (reversed because we want to inhibit the sig)
+
+## convert from symbol to affy id
+library(hgu133plus2.db)
+gg <- readLines("signature/av_stenosis_up.grp")
+gg.affy <- mget(gg, revmap(hgu133plus2SYMBOL), ifnotfound = NA)
+gg.affy <- [which(!is.na(gg.affy))]
+writeLines(sort(unlist(gg.affy)), "signature/av_stenosis_up_affy.grp")
+
+up <- read.delim(opt$up_grp, as.is=TRUE, header=FALSE)$V1
+down <- read.delim(opt$down_grp, as.is=TRUE, header=FALSE)$V1
+
+xsum <- function(x, up, down, n=489) {
+  up.ix <- which(rownames(x) %in% up)
+  down.ix <- which(rownames(x) %in% down)
+  f <- function(a) {
+    a_r <- rank(a)
+    changed <- a * (a_r > ( length(a_r) - n) | a_r < n)
+    sum(changed[up.ix]) - sum(changed[down.ix], na.rm=TRUE)
+  }
+  apply(x, 2, f)
+}
+scores <- xsum(data, up, down)
+names(scores) <- metadata$pert_desc[fda_ix]
+saveRDS(scores, file="_raw_drug_scores.rds")
+
+spec <- numeric()
+for(s in unique(drugs)) {
+  spec <- c(spec, median(scores[which(drugs==s)], na.rm=TRUE))
+}
+names(spec) <- unique(drugs)
+saveRDS(spec, file="_median_drug_scores.rds")
+
+# generate bootstrapped distribution
+
+cl <- makeCluster(opt$ncores)
+registerDoSNOW(cl)
+  
+r <- foreach(i=1:10000, .packages="rredis", .combine="cbind") %dopar% {
+  up <- sample(rownames(data), length(up))
+  down <- sample(rownames(data), length(down))
+  scores <- xsum(data, up, down)
+  names(scores) <- metadata$pert_desc[fda_ix]
+
+  drugs <- metadata$pert_desc[fda_ix]
+  spec <- numeric()
+  for(s in unique(drugs)) {
+    spec <- c(spec, median(scores[which(drugs == s)], na.rm=TRUE))
+  }
+  names(spec) <- unique(drugs)
+  spec
+}
+
+saveRDS(r, paste("_", length(up), "_", length(down), "_pdf.rds"))
+
+# count how many random observations are smaller than observed in spec
+spec_p <- apply(sweep(r, 1, spec, "-" ), 1, function(x) { sum(x<0)}) /  10001
+
+# make sure we only look at drugs with positive score
+spec_p <- spec_p * (spec > 0)
+#spec_p <- -log10(1-spec_p)
+
+# convert to P
+spec_p <- 1-spec_p
+
+saveRDS(spec_p, file=opt$outfile)
+
+stopCluster(cl)
+redisClose()
+
+
