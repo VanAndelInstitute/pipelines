@@ -1,0 +1,99 @@
+---
+title: "Metabolic Manipulation of Cardiomyocytes"
+author: "Eric Kort"
+date: "5/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## UK5099 treatment
+
+Cells were scored using our machine language image classification algorithm.
+
+```{r cars}
+
+dat <- readLines("~/Projects/diff_treat/tensorflow-for-poets-2/results_control.tab")
+
+first = TRUE
+result <- list()
+res <- matrix(ncol=4, nrow=0)
+for(l in dat) {
+  if(grepl("^m", l)) {
+    lab <- gsub("\\t.*", "", l)
+    val <- as.numeric(gsub(".*\\t", "", l))
+    result[[lab]] <- val
+  }
+  if(grepl("RESULTS:", l)) {
+    if(first){
+      first <- FALSE
+    } else {
+      res <- rbind(res, c(result$m1, result$m2, result$m3, result$m4))
+      result <- list()
+    }
+  }
+}
+
+colnames(res) <- c("M1", "M2", "M3", "M4")
+ctrl <- as.data.frame(res)
+ctrl$Treatment = "Control"
+
+dat <- readLines("~/Projects/diff_treat/tensorflow-for-poets-2/results_uk5099.tab")
+
+first = TRUE
+result <- list()
+res <- matrix(ncol=4, nrow=0)
+for(l in dat) {
+  if(grepl("^m", l)) {
+    lab <- gsub("\\t.*", "", l)
+    val <- as.numeric(gsub(".*\\t", "", l))
+    result[[lab]] <- val
+  }
+  if(grepl("RESULTS:", l)) {
+    if(first){
+      first <- FALSE
+    } else {
+      res <- rbind(res, c(result$m1, result$m2, result$m3, result$m4))
+      result <- list()
+    }
+  }
+}
+
+colnames(res) <- c("M1", "M2", "M3", "M4")
+uk5099 <- as.data.frame(res)
+uk5099$Treatment = "UK5099"
+
+dat <- rbind(ctrl, uk5099)
+
+#filter out ambiguous cells
+filter <- apply(dat[, 1:4], 1, function(x) (max(x) > 0.6))
+dat2 <- dat[filter,]
+```
+
+We can then plot scores and tabulate cell types. Note that Maturation Score of 
+1 is the most immature morphology, while 4 is the most mature morphology.
+
+```{r}
+library(ggplot2)
+library(reshape2)
+library(knitr)
+library(kableExtra)
+
+dat2.m <- melt(dat2, id.vars="Treatment")
+colnames(dat2.m) <- c("Treatment", "Cell.Type", "Score")
+ggplot(dat2.m, aes(x=Treatment, y=Score)) + 
+  geom_violin(width=0.4) + 
+  geom_jitter(width=0.1, size=1) +
+  facet_wrap( ~ Cell.Type) +
+  theme_bw()
+
+max <- apply(dat2[, 1:4], 1, function(x) (which(x == max(x))))
+tt <- table(max, dat2$Treatment)
+names(dimnames(tt))[1] <- "M Score"
+kable(tt, 
+  caption = "Number of cells classified into each of the 4 Maturation morphology types (1 = least differentiated, 4 = most differentiated).", 
+  row.names = TRUE, format = "html", align = c('l', 'c'),
+  table.attr = "class='striped' style='width:50%;'")
+```
